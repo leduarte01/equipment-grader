@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
-cmd = "npm ci"
+cmd = "npm install"
 
 [phases.build]
 cmd = "npm run build"
