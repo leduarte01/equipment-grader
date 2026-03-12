@@ -21,6 +21,7 @@ export interface Equipment {
   
   // Photo linked to serial number
   photoUrl?: string;
+  photoUrls?: string[];
   
   // Metadata
   createdAt: Date;

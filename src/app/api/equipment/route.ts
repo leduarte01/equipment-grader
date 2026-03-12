@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool, { initDb } from '@/lib/db';
 
 function mapRow(row: any) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const photosArr: string[] = Array.isArray(row.photos) ? row.photos : [];
+  const photosCount = photosArr.length > 0 ? photosArr.length : (row.photo_data ? 1 : 0);
+  const photoUrls = Array.from({ length: photosCount }, (_, i) => `${baseUrl}/api/equipment/${row.id}/photos/${i}`);
   return {
     id: row.id,
     serialNumber: row.serial_number,
@@ -10,7 +14,8 @@ function mapRow(row: any) {
     model: row.model,
     grade: row.grade,
     notes: row.notes,
-    photoUrl: row.photo_url,
+    photoUrl: photoUrls[0] || row.photo_url || null,
+    photoUrls,
     physical: row.physical_condition,
     visual: row.visual_condition,
     specifications: row.specifications,
@@ -70,22 +75,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       serialNumber, type, brand, model, grade,
-      notes, photoData,
+      notes, photosData, photoData, // photosData is new array; photoData kept for compat
       physical, visual, specifications,
     } = body;
+
+    // Normalise to array (support both new photosData[] and legacy single photoData)
+    const photos: string[] = Array.isArray(photosData) && photosData.length > 0
+      ? photosData
+      : (photoData ? [photoData] : []);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
 
     const result = await pool.query(
       `INSERT INTO equipment
-        (serial_number, type, brand, model, grade, notes, photo_data, photo_url, physical_condition, visual_condition, specifications)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (serial_number, type, brand, model, grade, notes, photo_data, photos, photo_url, physical_condition, visual_condition, specifications)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         serialNumber, type, brand, model, grade,
         notes || null,
-        photoData || null,
-        null, // photo_url set after we have the id
+        photos[0] || null,           // first photo in legacy column
+        JSON.stringify(photos),       // all photos in new column
+        null,                         // photo_url set after we have the id
         JSON.stringify(physical),
         JSON.stringify(visual),
         JSON.stringify(specifications),
@@ -95,8 +106,8 @@ export async function POST(req: NextRequest) {
     const row = result.rows[0];
 
     // Set the photo_url with the real id now that we have it
-    if (photoData) {
-      const photoUrl = `${baseUrl}/api/equipment/${row.id}/photo`;
+    if (photos.length > 0) {
+      const photoUrl = `${baseUrl}/api/equipment/${row.id}/photos/0`;
       await pool.query('UPDATE equipment SET photo_url = $1 WHERE id = $2', [photoUrl, row.id]);
       row.photo_url = photoUrl;
     }

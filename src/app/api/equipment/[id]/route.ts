@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 function mapRow(row: any) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const photosArr: string[] = Array.isArray(row.photos) ? row.photos : [];
+  const photosCount = photosArr.length > 0 ? photosArr.length : (row.photo_data ? 1 : 0);
+  const photoUrls = Array.from({ length: photosCount }, (_, i) => `${baseUrl}/api/equipment/${row.id}/photos/${i}`);
   return {
     id: row.id,
     serialNumber: row.serial_number,
@@ -10,7 +14,8 @@ function mapRow(row: any) {
     model: row.model,
     grade: row.grade,
     notes: row.notes,
-    photoUrl: row.photo_url,
+    photoUrl: photoUrls[0] || row.photo_url || null,
+    photoUrls,
     physical: row.physical_condition,
     visual: row.visual_condition,
     specifications: row.specifications,
@@ -38,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     const {
       serialNumber, type, brand, model, grade,
-      notes, photoData,
+      notes, photosData, photoData,
       physical, visual, specifications,
     } = body;
 
@@ -54,9 +59,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (model !== undefined) { updates.push(`model = $${i++}`); values.push(model); }
     if (grade !== undefined) { updates.push(`grade = $${i++}`); values.push(grade); }
     if (notes !== undefined) { updates.push(`notes = $${i++}`); values.push(notes); }
-    if (photoData !== undefined) {
+    if (photosData !== undefined) {
+      const photos: string[] = Array.isArray(photosData) ? photosData : [];
+      updates.push(`photos = $${i++}`); values.push(JSON.stringify(photos));
+      updates.push(`photo_data = $${i++}`); values.push(photos[0] || null);
+      updates.push(`photo_url = $${i++}`); values.push(photos.length > 0 ? `${baseUrl}/api/equipment/${id}/photos/0` : null);
+    } else if (photoData !== undefined) {
       updates.push(`photo_data = $${i++}`); values.push(photoData);
-      updates.push(`photo_url = $${i++}`); values.push(`${baseUrl}/api/equipment/${id}/photo`);
+      updates.push(`photos = $${i++}`); values.push(JSON.stringify(photoData ? [photoData] : []));
+      updates.push(`photo_url = $${i++}`); values.push(photoData ? `${baseUrl}/api/equipment/${id}/photos/0` : null);
     }
     if (physical !== undefined) { updates.push(`physical_condition = $${i++}`); values.push(JSON.stringify(physical)); }
     if (visual !== undefined) { updates.push(`visual_condition = $${i++}`); values.push(JSON.stringify(visual)); }

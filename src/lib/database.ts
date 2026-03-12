@@ -51,7 +51,7 @@ export class EquipmentDatabase {
     }
   }
 
-  public async addEquipment(equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'> & { photoData?: string }): Promise<Equipment> {
+  public async addEquipment(equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'> & { photosData?: string[] }): Promise<Equipment> {
     const res = await fetch('/api/equipment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

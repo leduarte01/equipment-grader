@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Equipment, EquipmentType, EquipmentGrade, PhysicalCondition, VisualCondition, EquipmentSpecifications, GRADE_CRITERIA } from '@/types/equipment';
-import { X, Monitor, Smartphone, AlertCircle, CheckCircle, Camera, Image } from 'lucide-react';
+import { X, Monitor, Smartphone, AlertCircle, CheckCircle, Camera } from 'lucide-react';
 import PhotoCapture from './PhotoCapture';
 
 interface AddEquipmentModalProps {
@@ -11,7 +11,6 @@ interface AddEquipmentModalProps {
 
 export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipmentModalProps) {
   const [step, setStep] = useState(1);
-  const [photoPreview, setPhotoPreview] = useState<string>('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [manualGrade, setManualGrade] = useState<EquipmentGrade | ''>('');
   const [formData, setFormData] = useState({
@@ -20,8 +19,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     brand: '',
     model: '',
     notes: '',
-    photoUrl: '',
-    photoData: '',
+    photosData: [] as string[],
     physical: {
       functioning: true,
       powerOn: true,
@@ -60,7 +58,6 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   useEffect(() => {
     if (!isOpen) {
       setStep(1);
-      setPhotoPreview('');
       setShowPhotoCapture(false);
     }
   }, [isOpen]);
@@ -106,14 +103,12 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   };
 
   const handlePhotoCapture = (photoData: string) => {
-    setPhotoPreview(photoData);
-    setFormData(prev => ({ ...prev, photoUrl: photoData, photoData }));
+    setFormData(prev => ({ ...prev, photosData: [...prev.photosData, photoData] }));
     setShowPhotoCapture(false);
   };
 
-  const removePhoto = () => {
-    setPhotoPreview('');
-    setFormData(prev => ({ ...prev, photoUrl: '' }));
+  const removePhotoAt = (index: number) => {
+    setFormData(prev => ({ ...prev, photosData: prev.photosData.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = () => {
@@ -128,8 +123,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       visual: formData.visual,
       specifications: formData.specifications,
       notes: formData.notes || undefined,
-      photoUrl: formData.photoUrl || undefined,
-      photoData: formData.photoData || undefined,
+      photosData: formData.photosData,
     };
     
     onAdd(equipment);
@@ -138,7 +132,6 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
 
   const handleClose = () => {
     setStep(1);
-    setPhotoPreview('');
     setShowPhotoCapture(false);
     setManualGrade('');
     setFormData({
@@ -147,8 +140,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       brand: '',
       model: '',
       notes: '',
-      photoUrl: '',
-      photoData: '',
+      photosData: [],
       physical: {
         functioning: true,
         powerOn: true,
@@ -326,75 +318,54 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                 </div>
               </div>
 
-              {/* Captura de Foto — só aparece quando todos os campos acima estão preenchidos */}
+              {/* Captura de Fotos — só aparece quando todos os campos acima estão preenchidos */}
               <div className="space-y-4">
-                <h4 className="text-md font-medium text-gray-800">Foto do Equipamento <span className="text-red-500">*</span></h4>
+                <h4 className="text-md font-medium text-gray-800">Fotos do Equipamento <span className="text-red-500">*</span></h4>
                 
                 {!formData.serialNumber || !formData.brand || !formData.model ? (
-                  <p className="text-sm text-gray-400 italic">Preencha o número de série, marca e modelo para habilitar a foto.</p>
-                ) : !photoPreview && (
-                  <div className="flex justify-center">
-                    <div className="w-full max-w-sm">
-                      <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
-                        Tirar Foto do Equipamento
-                      </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors">
-                        <button
-                          type="button"
-                          onClick={() => setShowPhotoCapture(true)}
-                          className="cursor-pointer w-full"
-                        >
-                          <div className="flex flex-col items-center gap-3">
-                            <Camera className="w-12 h-12 text-gray-400" />
-                            <span className="text-lg font-medium text-gray-700">
-                              Usar Câmera
-                            </span>
-                            <span className="text-sm text-gray-500">
-                              Capturar foto em tempo real
+                  <p className="text-sm text-gray-400 italic">Preencha o número de série, marca e modelo para habilitar as fotos.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Grid de thumbnails */}
+                    {formData.photosData.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {formData.photosData.map((photo, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={photo}
+                              alt={`Foto ${index + 1}`}
+                              className="w-full h-32 object-cover rounded-lg border border-gray-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removePhotoAt(index)}
+                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <span className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                              Foto {index + 1}
                             </span>
                           </div>
-                        </button>
+                        ))}
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {/* Preview da Foto Capturada */}
-                {(formData.serialNumber && formData.brand && formData.model) && photoPreview && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Foto Capturada
-                      </label>
-                      <img
-                        src={photoPreview}
-                        alt="Preview do equipamento"
-                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Vinculada ao S/N: {formData.serialNumber || 'Não informado'}
-                      </p>
-                    </div>
-                    
-                    <div className="flex flex-col justify-center space-y-3">
-                      <button
-                        type="button" 
-                        onClick={() => setShowPhotoCapture(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2 justify-center"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Nova Foto
-                      </button>
-                      
+                    {/* Botão adicionar foto */}
+                    <div className="flex justify-center">
                       <button
                         type="button"
-                        onClick={removePhoto}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center gap-2 justify-center"
+                        onClick={() => setShowPhotoCapture(true)}
+                        className="flex items-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 text-gray-600 hover:text-blue-600 transition-colors"
                       >
-                        <X className="w-4 h-4" />
-                        Remover Foto
+                        <Camera className="w-5 h-5" />
+                        {formData.photosData.length === 0 ? 'Tirar Foto' : 'Adicionar Foto'}
                       </button>
                     </div>
+
+                    {formData.photosData.length === 0 && (
+                      <p className="text-xs text-center text-red-500">Pelo menos uma foto é obrigatória</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -853,7 +824,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
           {step < 4 ? (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model || !formData.photoData)}
+              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model || formData.photosData.length === 0)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               Próximo

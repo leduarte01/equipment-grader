@@ -32,12 +32,15 @@ export async function initDb() {
         notes TEXT,
         photo_data TEXT,
         photo_url TEXT,
+        photos JSONB NOT NULL DEFAULT '[]',
         physical_condition JSONB NOT NULL DEFAULT '{}',
         visual_condition JSONB NOT NULL DEFAULT '{}',
         specifications JSONB NOT NULL DEFAULT '{}',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE equipment ADD COLUMN IF NOT EXISTS photos JSONB NOT NULL DEFAULT '[]';
     `);
   } finally {
     client.release();
