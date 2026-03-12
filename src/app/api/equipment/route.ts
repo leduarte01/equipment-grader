@@ -107,9 +107,6 @@ export async function POST(req: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Número de série já cadastrado.' }, { status: 409 });
     }
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return NextResponse.json({ error: 'Banco de dados não acessível.' }, { status: 503 });
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

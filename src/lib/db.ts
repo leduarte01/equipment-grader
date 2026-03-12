@@ -2,11 +2,9 @@ import { Pool } from 'pg';
 
 const globalForPg = global as unknown as { pool: Pool | null };
 
-const dbUrl = process.env.DATABASE_URL?.trim();
-
-const pool: Pool = globalForPg.pool || (dbUrl
+const pool: Pool = globalForPg.pool || (process.env.DATABASE_URL
   ? new Pool({
-      connectionString: dbUrl,
+      connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     })
   : new Pool({ max: 0 }) // dummy pool — DB not configured
