@@ -8,7 +8,7 @@ import AddEquipmentModal from '@/components/AddEquipmentModal';
 import SearchBar from '@/components/SearchBar';
 import SerialScanner from '@/components/SerialScanner';
 import StatsOverview from '@/components/StatsOverview';
-import { Plus, Search, Camera } from 'lucide-react';
+import { Plus, Search, Camera, FileDown } from 'lucide-react';
 
 export default function HomePage() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -87,6 +87,10 @@ export default function HomePage() {
     }
   };
 
+  const handleExportExcel = () => {
+    window.open('/api/export/excel', '_blank');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -127,6 +131,13 @@ export default function HomePage() {
               >
                 <Camera className="w-4 h-4" />
                 Escanear
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <FileDown className="w-4 h-4" />
+                Exportar Excel
               </button>
               <button
                 onClick={() => setIsAddModalOpen(true)}

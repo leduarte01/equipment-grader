@@ -1,14 +1,9 @@
-import { Equipment, EquipmentSearch, EquipmentGrade } from '@/types/equipment';
-
-const STORAGE_KEY = 'equipment-grader-data';
+import { Equipment, EquipmentSearch } from '@/types/equipment';
 
 export class EquipmentDatabase {
   private static instance: EquipmentDatabase;
-  private equipment: Equipment[] = [];
 
-  private constructor() {
-    this.loadFromStorage();
-  }
+  private constructor() {}
 
   public static getInstance(): EquipmentDatabase {
     if (!EquipmentDatabase.instance) {
@@ -17,157 +12,99 @@ export class EquipmentDatabase {
     return EquipmentDatabase.instance;
   }
 
-  private loadFromStorage(): void {
-    if (typeof window !== 'undefined') {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (data) {
-        try {
-          this.equipment = JSON.parse(data).map((item: any) => ({
-            ...item,
-            createdAt: new Date(item.createdAt),
-            updatedAt: new Date(item.updatedAt)
-          }));
-        } catch (error) {
-          console.error('Failed to load equipment data:', error);
-          this.equipment = [];
-        }
-      }
-    }
-  }
-
-  private saveToStorage(): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.equipment));
-    }
-  }
-
   public async getAllEquipment(): Promise<Equipment[]> {
-    return [...this.equipment];
+    try {
+      const res = await fetch('/api/equipment');
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
   }
 
   public async getEquipmentById(id: string): Promise<Equipment | null> {
-    return this.equipment.find(eq => eq.id === id) || null;
+    const res = await fetch(`/api/equipment/${id}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Erro ao carregar equipamento');
+    return res.json();
   }
 
   public async getEquipmentBySerialNumber(serialNumber: string): Promise<Equipment | null> {
-    return this.equipment.find(eq => eq.serialNumber.toLowerCase() === serialNumber.toLowerCase()) || null;
+    const res = await fetch(`/api/equipment?query=${encodeURIComponent(serialNumber)}`);
+    if (!res.ok) return null;
+    const list: Equipment[] = await res.json();
+    return list.find(eq => eq.serialNumber.toLowerCase() === serialNumber.toLowerCase()) || null;
   }
 
   public async searchEquipment(criteria: EquipmentSearch): Promise<Equipment[]> {
-    let results = [...this.equipment];
-
-    if (criteria.query) {
-      const query = criteria.query.toLowerCase();
-      results = results.filter(eq => 
-        eq.serialNumber.toLowerCase().includes(query) ||
-        eq.brand.toLowerCase().includes(query) ||
-        eq.model.toLowerCase().includes(query) ||
-        eq.notes?.toLowerCase().includes(query)
-      );
+    try {
+      const params = new URLSearchParams();
+      if (criteria.query) params.set('query', criteria.query);
+      if (criteria.type) params.set('type', criteria.type);
+      if (criteria.grade) params.set('grade', criteria.grade);
+      if (criteria.brand) params.set('brand', criteria.brand);
+      const res = await fetch(`/api/equipment?${params.toString()}`);
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
     }
-
-    if (criteria.type) {
-      results = results.filter(eq => eq.type === criteria.type);
-    }
-
-    if (criteria.grade) {
-      results = results.filter(eq => eq.grade === criteria.grade);
-    }
-
-    if (criteria.brand) {
-      results = results.filter(eq => eq.brand.toLowerCase().includes(criteria.brand!.toLowerCase()));
-    }
-
-    return results.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
-  public async addEquipment(equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'>): Promise<Equipment> {
-    const newEquipment: Equipment = {
-      ...equipment,
-      id: this.generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    this.equipment.push(newEquipment);
-    this.saveToStorage();
-    return newEquipment;
+  public async addEquipment(equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'> & { photoData?: string }): Promise<Equipment> {
+    const res = await fetch('/api/equipment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(equipment),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Erro ao adicionar equipamento');
+    }
+    return res.json();
   }
 
   public async updateEquipment(id: string, updates: Partial<Omit<Equipment, 'id' | 'createdAt'>>): Promise<Equipment | null> {
-    const index = this.equipment.findIndex(eq => eq.id === id);
-    if (index === -1) return null;
-
-    this.equipment[index] = {
-      ...this.equipment[index],
-      ...updates,
-      updatedAt: new Date()
-    };
-
-    this.saveToStorage();
-    return this.equipment[index];
+    const res = await fetch(`/api/equipment/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Erro ao atualizar equipamento');
+    return res.json();
   }
 
   public async deleteEquipment(id: string): Promise<boolean> {
-    const index = this.equipment.findIndex(eq => eq.id === id);
-    if (index === -1) return false;
-
-    this.equipment.splice(index, 1);
-    this.saveToStorage();
-    return true;
+    const res = await fetch(`/api/equipment/${id}`, { method: 'DELETE' });
+    return res.ok;
   }
 
-  public async getStatistics(): Promise<{
-    total: number;
-    byType: Record<string, number>;
-    byGrade: Record<EquipmentGrade, number>;
-  }> {
-    const total = this.equipment.length;
-    const byType: Record<string, number> = {};
-    const byGrade: Record<EquipmentGrade, number> = { 'A+': 0, 'A': 0, 'B': 0, 'C': 0 };
-
-    this.equipment.forEach(eq => {
-      byType[eq.type] = (byType[eq.type] || 0) + 1;
-      byGrade[eq.grade]++;
-    });
-
-    return { total, byType, byGrade };
-  }
-
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  }
-
-  // Utility methods
-  public async exportData(): Promise<string> {
-    return JSON.stringify(this.equipment, null, 2);
-  }
-
-  public async importData(data: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const importedEquipment = JSON.parse(data);
-      
-      if (!Array.isArray(importedEquipment)) {
-        return { success: false, message: 'Invalid data format' };
-      }
-
-      // Validate structure
-      for (const item of importedEquipment) {
-        if (!item.id || !item.serialNumber || !item.type || !item.grade) {
-          return { success: false, message: 'Missing required fields in data' };
-        }
-      }
-
-      this.equipment = importedEquipment.map((item: any) => ({
-        ...item,
-        createdAt: new Date(item.createdAt),
-        updatedAt: new Date(item.updatedAt)
-      }));
-
-      this.saveToStorage();
-      return { success: true, message: `Successfully imported ${importedEquipment.length} equipment records` };
-    } catch (error) {
-      return { success: false, message: 'Failed to parse import data' };
-    }
+  // Legacy stub — kept to satisfy any old call-sites
+  private generateId_unused(): string {
+    return Math.random().toString(36).substr(2, 9);
   }
 }
+
+export const GRADE_CRITERIA = {
+  'A+': {
+    name: 'Como Novo',
+    description: 'Aspeto impecável, sem marcas visíveis. Funcionamento perfeito.',
+    color: 'text-green-600 bg-green-50 border-green-300',
+  },
+  'A': {
+    name: 'Muito Bom',
+    description: 'Riscos muito ligeiros e quase invisíveis. Funcionamento excelente.',
+    color: 'text-green-500 bg-green-50 border-green-200',
+  },
+  'B': {
+    name: 'Bom',
+    description: 'Algumas marcas visíveis mas em bom funcionamento.',
+    color: 'text-yellow-600 bg-yellow-50 border-yellow-300',
+  },
+  'C': {
+    name: 'Aceitável',
+    description: 'Marcas visíveis, pode ter problemas menores de funcionamento.',
+    color: 'text-orange-600 bg-orange-50 border-orange-300',
+  },
+};

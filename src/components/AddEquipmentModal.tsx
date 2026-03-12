@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Equipment, EquipmentType, EquipmentGrade, PhysicalCondition, VisualCondition, EquipmentSpecifications, GRADE_CRITERIA } from '@/types/equipment';
-import { X, Monitor, Smartphone, AlertCircle, CheckCircle, Camera, Image, Video, StopCircle } from 'lucide-react';
+import { X, Monitor, Smartphone, AlertCircle, CheckCircle, Camera, Image } from 'lucide-react';
+import PhotoCapture from './PhotoCapture';
 
 interface AddEquipmentModalProps {
   isOpen: boolean;
@@ -11,11 +12,7 @@ interface AddEquipmentModalProps {
 export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipmentModalProps) {
   const [step, setStep] = useState(1);
   const [photoPreview, setPhotoPreview] = useState<string>('');
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [formData, setFormData] = useState({
     serialNumber: '',
     type: 'computer' as EquipmentType,
@@ -23,6 +20,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     model: '',
     notes: '',
     photoUrl: '',
+    photoData: '',
     physical: {
       functioning: true,
       powerOn: true,
@@ -57,14 +55,14 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     } as EquipmentSpecifications
   });
 
-  // Cleanup da câmera quando o componente for desmontado
+  // Cleanup quando o modal for fechado
   useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [stream]);
+    if (!isOpen) {
+      setStep(1);
+      setPhotoPreview('');
+      setShowPhotoCapture(false);
+    }
+  }, [isOpen]);
 
   const calculateGrade = (): EquipmentGrade => {
     const { physical, visual } = formData;
@@ -106,147 +104,15 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     return 'C';
   };
 
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'environment' // Usar câmera traseira se disponível
-        }
-      });
-      
-      setStream(mediaStream);
-      setIsCameraActive(true);
-      setIsCameraReady(false);
-      
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = mediaStream;
-        
-        // Múltiplas formas de detectar quando o video está pronto
-        const handleVideoReady = () => {
-          setIsCameraReady(true);
-          console.log('Câmera pronta para captura!');
-        };
-        
-        // Event listeners para diferentes estados de carregamento
-        video.onloadedmetadata = handleVideoReady;
-        video.oncanplay = handleVideoReady;
-        video.onplaying = handleVideoReady;
-        
-        // Fallback com timeout se os eventos não dispararem
-        const timeoutId = setTimeout(() => {
-          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-            setIsCameraReady(true);
-            console.log('Câmera pronta via timeout!');
-          }
-        }, 3000);
-        
-        // Iniciar reprodução
-        try {
-          await video.play();
-          // Limpar timeout se play foi bem-sucedido
-          clearTimeout(timeoutId);
-        } catch (playError) {
-          console.error('Erro ao iniciar video:', playError);
-          clearTimeout(timeoutId);
-          setIsCameraReady(true); // Permitir tentativa mesmo com erro de play
-        }
-        
-        console.log('Câmera iniciada com sucesso!');
-      }
-    } catch (error) {
-      console.error('Erro ao acessar a câmera:', error);
-      alert('Não foi possível acessar a câmera. Verifique as permissões.');
-      setIsCameraActive(false);
-      setIsCameraReady(false);
-    }
+  const handlePhotoCapture = (photoData: string) => {
+    setPhotoPreview(photoData);
+    setFormData(prev => ({ ...prev, photoUrl: photoData, photoData }));
+    setShowPhotoCapture(false);
   };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
-    setIsCameraActive(false);
-    setIsCameraReady(false);
-  };
-
-  const capturePhoto = () => {
-    console.log('Tentando capturar foto...');
-    
-    if (!videoRef.current || !canvasRef.current) {
-      alert('Câmera não está disponível. Tente reiniciar a câmera.');
-      return;
-    }
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    console.log('Estado do video:', {
-      readyState: video.readyState,
-      videoWidth: video.videoWidth,
-      videoHeight: video.videoHeight,
-      paused: video.paused,
-      ended: video.ended
-    });
-    
-    // Verificações mais flexíveis
-    if (video.readyState < 2) {
-      alert('Video ainda carregando. Aguarde um momento e tente novamente.');
-      return;
-    }
-    
-    // Aguardar um pouco se as dimensões não estão disponíveis
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      console.log('Aguardando dimensões do video...');
-      setTimeout(() => {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          capturePhoto(); // Tentar novamente
-        } else {
-          alert('Erro nas dimensões do video. Tente reiniciar a câmera.');
-        }
-      }, 500);
-      return;
-    }
-    
-    if (ctx) {
-      try {
-        // Definir o tamanho do canvas
-        const width = video.videoWidth;
-        const height = video.videoHeight;
-        canvas.width = width;
-        canvas.height = height;
-        
-        console.log(`Capturando: ${width}x${height}`);
-        
-        // Desenhar o frame atual do video no canvas
-        ctx.drawImage(video, 0, 0, width, height);
-        
-        // Converter para data URL
-        const photoUrl = canvas.toDataURL('image/jpeg', 0.8);
-        
-        if (photoUrl && photoUrl !== 'data:,' && photoUrl.length > 100) {
-          setPhotoPreview(photoUrl);
-          setFormData(prev => ({ ...prev, photoUrl }));
-          
-          // Parar a câmera após capturar
-          stopCamera();
-          
-          console.log('Foto capturada com sucesso!', photoUrl.substring(0, 50) + '...');
-        } else {
-          console.error('Data URL inválida:', photoUrl);
-          alert('Erro ao processar a foto. Tente novamente.');
-        }
-      } catch (error) {
-        console.error('Erro ao capturar foto:', error);
-        alert(`Erro ao capturar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-      }
-    } else {
-      alert('Erro no canvas. Tente reiniciar a câmera.');
-    }
+  const removePhoto = () => {
+    setPhotoPreview('');
+    setFormData(prev => ({ ...prev, photoUrl: '' }));
   };
 
   const handleSubmit = () => {
@@ -262,6 +128,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       specifications: formData.specifications,
       notes: formData.notes || undefined,
       photoUrl: formData.photoUrl || undefined,
+      photoData: formData.photoData || undefined,
     };
     
     onAdd(equipment);
@@ -269,12 +136,9 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   };
 
   const handleClose = () => {
-    // Parar a câmera se estiver ativa
-    stopCamera();
-    
     setStep(1);
     setPhotoPreview('');
-    setIsCameraReady(false);
+    setShowPhotoCapture(false);
     setFormData({
       serialNumber: '',
       type: 'computer',
@@ -282,6 +146,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       model: '',
       notes: '',
       photoUrl: '',
+      photoData: '',
       physical: {
         functioning: true,
         powerOn: true,
@@ -432,14 +297,16 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Marca *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.brand}
                     onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={formData.type === 'computer' ? 'Ex: Dell, HP, Lenovo' : 'Ex: Apple, Samsung, Xiaomi'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                     required
-                  />
+                  >
+                    <option value="">Selecione a marca...</option>
+                    <option value="APPLE">APPLE</option>
+                    <option value="DELL">DELL</option>
+                  </select>
                 </div>
 
                 <div>
@@ -457,11 +324,13 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                 </div>
               </div>
 
-              {/* Captura de Foto */}
+              {/* Captura de Foto — só aparece quando todos os campos acima estão preenchidos */}
               <div className="space-y-4">
-                <h4 className="text-md font-medium text-gray-800">Foto do Equipamento</h4>
+                <h4 className="text-md font-medium text-gray-800">Foto do Equipamento <span className="text-red-500">*</span></h4>
                 
-                {!photoPreview && !isCameraActive && (
+                {!formData.serialNumber || !formData.brand || !formData.model ? (
+                  <p className="text-sm text-gray-400 italic">Preencha o número de série, marca e modelo para habilitar a foto.</p>
+                ) : !photoPreview && (
                   <div className="flex justify-center">
                     <div className="w-full max-w-sm">
                       <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
@@ -470,7 +339,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors">
                         <button
                           type="button"
-                          onClick={startCamera}
+                          onClick={() => setShowPhotoCapture(true)}
                           className="cursor-pointer w-full"
                         >
                           <div className="flex flex-col items-center gap-3">
@@ -488,66 +357,8 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                   </div>
                 )}
 
-                {/* Visualização da Câmera */}
-                {isCameraActive && (
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <video
-                        ref={videoRef}
-                        className="w-full max-w-md mx-auto rounded-lg border border-gray-300"
-                        autoPlay
-                        playsInline
-                        muted
-                      />
-                      <canvas ref={canvasRef} className="hidden" />
-                      
-                      {/* Indicador de carregamento */}
-                      {!isCameraReady && (
-                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                          <div className="text-white text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                            <p className="mb-3">Carregando câmera...</p>
-                            <button
-                              type="button"
-                              onClick={() => setIsCameraReady(true)}
-                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                              Forçar Carregamento
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex justify-center gap-4">
-                      <button
-                        type="button"
-                        onClick={capturePhoto}
-                        disabled={!isCameraReady}
-                        className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 flex items-center gap-2 ${
-                          isCameraReady 
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' 
-                            : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        }`}
-                      >
-                        <Camera className="w-4 h-4" />
-                        {isCameraReady ? 'Capturar Foto' : 'Aguarde...'}
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={stopCamera}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center gap-2"
-                      >
-                        <StopCircle className="w-4 h-4" />
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Preview da Foto Capturada */}
-                {photoPreview && !isCameraActive && (
+                {(formData.serialNumber && formData.brand && formData.model) && photoPreview && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -566,7 +377,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                     <div className="flex flex-col justify-center space-y-3">
                       <button
                         type="button" 
-                        onClick={startCamera}
+                        onClick={() => setShowPhotoCapture(true)}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2 justify-center"
                       >
                         <Camera className="w-4 h-4" />
@@ -575,10 +386,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                       
                       <button
                         type="button"
-                        onClick={() => {
-                          setPhotoPreview('');
-                          setFormData(prev => ({ ...prev, photoUrl: '' }));
-                        }}
+                        onClick={removePhoto}
                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center gap-2 justify-center"
                       >
                         <X className="w-4 h-4" />
@@ -959,7 +767,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                           value={formData.specifications.screenSize}
                           onChange={(e) => updateFormData('specifications', 'screenSize', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          placeholder='Ex: 15.6", 13.3"'
+                          placeholder="Ex: 15.6&quot;, 13.3&quot;"
                         />
                       </div>
                     </>
@@ -1035,7 +843,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
           {step < 4 ? (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model)}
+              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model || !formData.photoData)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               Próximo
@@ -1051,6 +859,15 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
           )}
         </div>
       </div>
+
+      {/* Componente PhotoCapture */}
+      {showPhotoCapture && (
+        <PhotoCapture
+          isOpen={showPhotoCapture}
+          onPhotoCapture={handlePhotoCapture}
+          onClose={() => setShowPhotoCapture(false)}
+        />
+      )}
     </div>
   );
 }
