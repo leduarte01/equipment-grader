@@ -12,6 +12,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   const [step, setStep] = useState(1);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -117,14 +118,28 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       
       setStream(mediaStream);
       setIsCameraActive(true);
+      setIsCameraReady(false);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        
+        // Aguardar o video estar pronto para captura
+        await new Promise((resolve) => {
+          const video = videoRef.current!;
+          video.onloadedmetadata = () => {
+            video.play();
+            setIsCameraReady(true);
+            resolve(void 0);
+          };
+        });
+        
+        console.log('Câmera iniciada com sucesso!');
       }
     } catch (error) {
       console.error('Erro ao acessar a câmera:', error);
       alert('Não foi possível acessar a câmera. Verifique as permissões.');
+      setIsCameraActive(false);
+      setIsCameraReady(false);
     }
   };
 
@@ -134,6 +149,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       setStream(null);
     }
     setIsCameraActive(false);
+    setIsCameraReady(false);
   };
 
   const capturePhoto = () => {
@@ -142,22 +158,48 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       
-      if (ctx) {
-        // Definir o tamanho do canvas igual ao video
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        // Desenhar o frame atual do video no canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Converter para data URL
-        const photoUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setPhotoPreview(photoUrl);
-        setFormData(prev => ({ ...prev, photoUrl }));
-        
-        // Parar a câmera após capturar
-        stopCamera();
+      // Verificar se o video está pronto
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        alert('Video ainda não está pronto. Aguarde um momento e tente novamente.');
+        return;
       }
+      
+      // Verificar se temos dimensões válidas  
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        alert('Erro na câmera. Tente fechar e abrir novamente.');
+        return;
+      }
+      
+      if (ctx) {
+        try {
+          // Definir o tamanho do canvas igual ao video
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          
+          // Desenhar o frame atual do video no canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Converter para data URL
+          const photoUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          if (photoUrl && photoUrl !== 'data:,') {
+            setPhotoPreview(photoUrl);
+            setFormData(prev => ({ ...prev, photoUrl }));
+            
+            // Parar a câmera após capturar
+            stopCamera();
+            
+            console.log('Foto capturada com sucesso!');
+          } else {
+            alert('Erro ao capturar a foto. Tente novamente.');
+          }
+        } catch (error) {
+          console.error('Erro ao capturar foto:', error);
+          alert('Erro ao processar a foto. Tente novamente.');
+        }
+      }
+    } else {
+      alert('Câmera não disponível. Tente abrir a câmera novamente.');
     }
   };
 
@@ -186,6 +228,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     
     setStep(1);
     setPhotoPreview('');
+    setIsCameraReady(false);
     setFormData({
       serialNumber: '',
       type: 'computer',
@@ -411,16 +454,31 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                         muted
                       />
                       <canvas ref={canvasRef} className="hidden" />
+                      
+                      {/* Indicador de carregamento */}
+                      {!isCameraReady && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                          <div className="text-white text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                            <p>Carregando câmera...</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex justify-center gap-4">
                       <button
                         type="button"
                         onClick={capturePhoto}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+                        disabled={!isCameraReady}
+                        className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 flex items-center gap-2 ${
+                          isCameraReady 
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500' 
+                            : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        }`}
                       >
                         <Camera className="w-4 h-4" />
-                        Capturar Foto
+                        {isCameraReady ? 'Capturar Foto' : 'Aguarde...'}
                       </button>
                       
                       <button
