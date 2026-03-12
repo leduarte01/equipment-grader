@@ -15,6 +15,7 @@ export default function HomePage() {
   const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [searchCriteria, setSearchCriteria] = useState<EquipmentSearch>({});
   const [loading, setLoading] = useState(true);
 
@@ -73,6 +74,7 @@ export default function HomePage() {
     try {
       await db.updateEquipment(id, updates);
       await loadEquipment();
+      setEditingEquipment(null);
     } catch (error) {
       console.error('Failed to update equipment:', error);
     }
@@ -124,24 +126,24 @@ export default function HomePage() {
                 initialCriteria={searchCriteria}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 justify-end">
               <button
                 onClick={() => setIsScannerOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
               >
                 <Camera className="w-4 h-4" />
                 Escanear
               </button>
               <button
                 onClick={handleExportExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
               >
                 <FileDown className="w-4 h-4" />
                 Exportar Excel
               </button>
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 Adicionar
@@ -177,6 +179,7 @@ export default function HomePage() {
                 equipment={eq}
                 onUpdate={handleUpdateEquipment}
                 onDelete={handleDeleteEquipment}
+                onEdit={setEditingEquipment}
               />
             ))
           )}
@@ -184,9 +187,11 @@ export default function HomePage() {
 
         {/* Modals */}
         <AddEquipmentModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
+          isOpen={isAddModalOpen || editingEquipment !== null}
+          onClose={() => { setIsAddModalOpen(false); setEditingEquipment(null); }}
           onAdd={handleAddEquipment}
+          editEquipment={editingEquipment ?? undefined}
+          onUpdate={handleUpdateEquipment}
         />
 
         <SerialScanner

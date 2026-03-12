@@ -7,12 +7,16 @@ interface AddEquipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (equipment: Omit<Equipment, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  editEquipment?: Equipment;
+  onUpdate?: (id: string, updates: any) => void;
 }
 
-export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipmentModalProps) {
+export default function AddEquipmentModal({ isOpen, onClose, onAdd, editEquipment, onUpdate }: AddEquipmentModalProps) {
+  const isEditMode = !!editEquipment;
   const [step, setStep] = useState(1);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [manualGrade, setManualGrade] = useState<EquipmentGrade | ''>('');
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     serialNumber: '',
     type: 'computer' as EquipmentType,
@@ -54,13 +58,31 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     } as EquipmentSpecifications
   });
 
-  // Cleanup quando o modal for fechado
+  // Populate form when opening in edit mode
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen && editEquipment) {
+      const urls = editEquipment.photoUrls && editEquipment.photoUrls.length > 0
+        ? editEquipment.photoUrls
+        : editEquipment.photoUrl ? [editEquipment.photoUrl] : [];
+      setExistingPhotoUrls(urls);
+      setManualGrade(editEquipment.grade);
+      setFormData({
+        serialNumber: editEquipment.serialNumber,
+        type: editEquipment.type,
+        brand: editEquipment.brand,
+        model: editEquipment.model,
+        notes: editEquipment.notes || '',
+        photosData: [],
+        physical: { ...editEquipment.physical },
+        visual: { ...editEquipment.visual },
+        specifications: { ...editEquipment.specifications },
+      });
+    } else if (!isOpen) {
       setStep(1);
       setShowPhotoCapture(false);
+      setExistingPhotoUrls([]);
     }
-  }, [isOpen]);
+  }, [isOpen, editEquipment?.id]);
 
   const calculateGrade = (): EquipmentGrade => {
     const { physical, visual } = formData;
@@ -113,7 +135,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
 
   const handleSubmit = () => {
     const grade = manualGrade || calculateGrade();
-    const equipment = {
+    const payload: any = {
       serialNumber: formData.serialNumber,
       type: formData.type,
       brand: formData.brand,
@@ -123,10 +145,16 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       visual: formData.visual,
       specifications: formData.specifications,
       notes: formData.notes || undefined,
-      photosData: formData.photosData,
     };
-    
-    onAdd(equipment);
+    if (formData.photosData.length > 0) {
+      payload.photosData = formData.photosData;
+    }
+
+    if (isEditMode && editEquipment && onUpdate) {
+      onUpdate(editEquipment.id, payload);
+    } else {
+      onAdd({ ...payload, photosData: formData.photosData });
+    }
     handleClose();
   };
 
@@ -211,7 +239,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold">Adicionar Equipamento</h2>
+            <h2 className="text-xl font-semibold">{isEditMode ? 'Editar Equipamento' : 'Adicionar Equipamento'}</h2>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>Passo {step} de 4</span>
             </div>
@@ -320,13 +348,35 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
 
               {/* Captura de Fotos — só aparece quando todos os campos acima estão preenchidos */}
               <div className="space-y-4">
-                <h4 className="text-md font-medium text-gray-800">Fotos do Equipamento <span className="text-red-500">*</span></h4>
+                <h4 className="text-md font-medium text-gray-800">Fotos do Equipamento {!isEditMode && <span className="text-red-500">*</span>}</h4>
                 
                 {!formData.serialNumber || !formData.brand || !formData.model ? (
                   <p className="text-sm text-gray-400 italic">Preencha o número de série, marca e modelo para habilitar as fotos.</p>
                 ) : (
                   <div className="space-y-3">
-                    {/* Grid de thumbnails */}
+                    {/* Existing photos (edit mode) */}
+                    {isEditMode && existingPhotoUrls.length > 0 && formData.photosData.length === 0 && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Fotos atuais ({existingPhotoUrls.length})</p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {existingPhotoUrls.map((url, index) => (
+                            <div key={index} className="relative">
+                              <img
+                                src={url}
+                                alt={`Foto ${index + 1}`}
+                                className="w-full h-32 object-cover rounded-lg border border-gray-200 opacity-70"
+                              />
+                              <span className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                                Foto {index + 1}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Capture novas fotos abaixo para substituir as atuais.</p>
+                      </div>
+                    )}
+
+                    {/* Grid de thumbnails novos */}
                     {formData.photosData.length > 0 && (
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {formData.photosData.map((photo, index) => (
@@ -363,7 +413,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                       </button>
                     </div>
 
-                    {formData.photosData.length === 0 && (
+                    {!isEditMode && formData.photosData.length === 0 && (
                       <p className="text-xs text-center text-red-500">Pelo menos uma foto é obrigatória</p>
                     )}
                   </div>
@@ -824,7 +874,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
           {step < 4 ? (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model || formData.photosData.length === 0)}
+              disabled={step === 1 && (!formData.serialNumber || !formData.brand || !formData.model || (!isEditMode && formData.photosData.length === 0))}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               Próximo
@@ -835,7 +885,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
               disabled={!formData.serialNumber || !formData.brand || !formData.model}
               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              Cadastrar Equipamento
+              {isEditMode ? 'Salvar Alterações' : 'Cadastrar Equipamento'}
             </button>
           )}
         </div>

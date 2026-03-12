@@ -6,9 +6,10 @@ interface EquipmentCardProps {
   equipment: Equipment;
   onUpdate: (id: string, updates: Partial<Equipment>) => void;
   onDelete: (id: string) => void;
+  onEdit: (equipment: Equipment) => void;
 }
 
-export default function EquipmentCard({ equipment, onUpdate, onDelete }: EquipmentCardProps) {
+export default function EquipmentCard({ equipment, onUpdate, onDelete, onEdit }: EquipmentCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const grade = GRADE_CRITERIA[equipment.grade];
 
@@ -154,7 +155,7 @@ export default function EquipmentCard({ equipment, onUpdate, onDelete }: Equipme
           
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {/* TODO: Open edit modal */}}
+              onClick={() => onEdit(equipment)}
               className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
               title="Editar"
             >
