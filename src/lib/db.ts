@@ -2,12 +2,14 @@ import { Pool } from 'pg';
 
 const globalForPg = global as unknown as { pool: Pool | null };
 
-const pool: Pool = globalForPg.pool || (process.env.DATABASE_URL
+const dbUrl = process.env.DATABASE_URL?.trim();
+
+const pool: Pool = globalForPg.pool || (dbUrl
   ? new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     })
-  : new Pool({ max: 0 }) // dummy pool — all queries will fail gracefully
+  : new Pool({ max: 0 }) // dummy pool — DB not configured
 );
 
 if (process.env.NODE_ENV !== 'production') {
