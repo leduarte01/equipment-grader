@@ -43,6 +43,19 @@ export async function GET(_req: NextRequest) {
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
 
+    // Convert photo URL column to hyperlinks
+    const photoColIndex = Object.keys(rows[0] || {}).indexOf('Link da Foto');
+    if (photoColIndex >= 0) {
+      const colLetter = XLSX.utils.encode_col(photoColIndex);
+      rows.forEach((row, i) => {
+        const url = row['Link da Foto'];
+        if (url) {
+          const cellRef = `${colLetter}${i + 2}`; // +2: header row + 1-based
+          worksheet[cellRef].l = { Target: url, Tooltip: 'Abrir foto' };
+        }
+      });
+    }
+
     // Auto-fit columns
     const colWidths = Object.keys(rows[0] || {}).map((key) => ({
       wch: Math.max(key.length, ...rows.map((r) => String((r as any)[key] || '').length)) + 2,

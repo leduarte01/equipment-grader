@@ -13,6 +13,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   const [step, setStep] = useState(1);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
+  const [manualGrade, setManualGrade] = useState<EquipmentGrade | ''>('');
   const [formData, setFormData] = useState({
     serialNumber: '',
     type: 'computer' as EquipmentType,
@@ -116,7 +117,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   };
 
   const handleSubmit = () => {
-    const grade = calculateGrade();
+    const grade = manualGrade || calculateGrade();
     const equipment = {
       serialNumber: formData.serialNumber,
       type: formData.type,
@@ -139,6 +140,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
     setStep(1);
     setPhotoPreview('');
     setShowPhotoCapture(false);
+    setManualGrade('');
     setFormData({
       serialNumber: '',
       type: 'computer',
@@ -395,18 +397,6 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Grade Preview em Tempo Real */}
-              <div className={`p-4 rounded-lg border-2 ${gradeInfo.color}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="w-5 h-5" />
-                  <h4 className="font-medium">Grade Prevista: {currentGrade} - {gradeInfo.name}</h4>
-                </div>
-                <p className="text-sm">{gradeInfo.description}</p>
-                <p className="text-xs text-gray-600 mt-2">
-                  *Grade será atualizada conforme você preencher as condições físicas e visuais
-                </p>
               </div>
             </div>
           )}
@@ -820,12 +810,50 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
               </div>
 
               {/* Grade Preview */}
-              <div className={`p-4 rounded-lg border-2 ${gradeInfo.color}`}>
+              <div className={`p-4 rounded-lg border-2 ${(GRADE_CRITERIA[manualGrade as EquipmentGrade] || gradeInfo).color}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5" />
-                  <h4 className="font-medium">Grade Final: {currentGrade} - {gradeInfo.name}</h4>
+                  <h4 className="font-medium">
+                    Grade Final: {manualGrade || currentGrade} — {(GRADE_CRITERIA[manualGrade as EquipmentGrade] || gradeInfo).name}
+                    {manualGrade && <span className="ml-2 text-xs font-normal bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Manual</span>}
+                  </h4>
                 </div>
-                <p className="text-sm">{gradeInfo.description}</p>
+                <p className="text-sm">{(GRADE_CRITERIA[manualGrade as EquipmentGrade] || gradeInfo).description}</p>
+              </div>
+
+              {/* Classificação Manual */}
+              <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useManualGrade"
+                    checked={manualGrade !== ''}
+                    onChange={(e) => setManualGrade(e.target.checked ? currentGrade : '')}
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="useManualGrade" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Usar classificação manual (substitui a automática)
+                  </label>
+                </div>
+
+                {manualGrade !== '' && (
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {(['A+', 'A', 'B', 'C'] as EquipmentGrade[]).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setManualGrade(g)}
+                        className={`py-2 rounded-lg font-bold text-sm border-2 transition-colors ${
+                          manualGrade === g
+                            ? GRADE_CRITERIA[g].color + ' border-current'
+                            : 'border-gray-200 text-gray-400 hover:border-gray-400'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
