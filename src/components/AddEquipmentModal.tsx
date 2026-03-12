@@ -121,17 +121,38 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
       setIsCameraReady(false);
       
       if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+        const video = videoRef.current;
+        video.srcObject = mediaStream;
         
-        // Aguardar o video estar pronto para captura
-        await new Promise((resolve) => {
-          const video = videoRef.current!;
-          video.onloadedmetadata = () => {
-            video.play();
+        // Múltiplas formas de detectar quando o video está pronto
+        const handleVideoReady = () => {
+          setIsCameraReady(true);
+          console.log('Câmera pronta para captura!');
+        };
+        
+        // Event listeners para diferentes estados de carregamento
+        video.onloadedmetadata = handleVideoReady;
+        video.oncanplay = handleVideoReady;
+        video.onplaying = handleVideoReady;
+        
+        // Fallback com timeout se os eventos não dispararem
+        const timeoutId = setTimeout(() => {
+          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
             setIsCameraReady(true);
-            resolve(void 0);
-          };
-        });
+            console.log('Câmera pronta via timeout!');
+          }
+        }, 3000);
+        
+        // Iniciar reprodução
+        try {
+          await video.play();
+          // Limpar timeout se play foi bem-sucedido
+          clearTimeout(timeoutId);
+        } catch (playError) {
+          console.error('Erro ao iniciar video:', playError);
+          clearTimeout(timeoutId);
+          setIsCameraReady(true); // Permitir tentativa mesmo com erro de play
+        }
         
         console.log('Câmera iniciada com sucesso!');
       }
@@ -153,53 +174,78 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
   };
 
   const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      // Verificar se o video está pronto
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-        alert('Video ainda não está pronto. Aguarde um momento e tente novamente.');
-        return;
-      }
-      
-      // Verificar se temos dimensões válidas  
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        alert('Erro na câmera. Tente fechar e abrir novamente.');
-        return;
-      }
-      
-      if (ctx) {
-        try {
-          // Definir o tamanho do canvas igual ao video
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+    console.log('Tentando capturar foto...');
+    
+    if (!videoRef.current || !canvasRef.current) {
+      alert('Câmera não está disponível. Tente reiniciar a câmera.');
+      return;
+    }
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    console.log('Estado do video:', {
+      readyState: video.readyState,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      paused: video.paused,
+      ended: video.ended
+    });
+    
+    // Verificações mais flexíveis
+    if (video.readyState < 2) {
+      alert('Video ainda carregando. Aguarde um momento e tente novamente.');
+      return;
+    }
+    
+    // Aguardar um pouco se as dimensões não estão disponíveis
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.log('Aguardando dimensões do video...');
+      setTimeout(() => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          capturePhoto(); // Tentar novamente
+        } else {
+          alert('Erro nas dimensões do video. Tente reiniciar a câmera.');
+        }
+      }, 500);
+      return;
+    }
+    
+    if (ctx) {
+      try {
+        // Definir o tamanho do canvas
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        canvas.width = width;
+        canvas.height = height;
+        
+        console.log(`Capturando: ${width}x${height}`);
+        
+        // Desenhar o frame atual do video no canvas
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        // Converter para data URL
+        const photoUrl = canvas.toDataURL('image/jpeg', 0.8);
+        
+        if (photoUrl && photoUrl !== 'data:,' && photoUrl.length > 100) {
+          setPhotoPreview(photoUrl);
+          setFormData(prev => ({ ...prev, photoUrl }));
           
-          // Desenhar o frame atual do video no canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          // Parar a câmera após capturar
+          stopCamera();
           
-          // Converter para data URL
-          const photoUrl = canvas.toDataURL('image/jpeg', 0.8);
-          
-          if (photoUrl && photoUrl !== 'data:,') {
-            setPhotoPreview(photoUrl);
-            setFormData(prev => ({ ...prev, photoUrl }));
-            
-            // Parar a câmera após capturar
-            stopCamera();
-            
-            console.log('Foto capturada com sucesso!');
-          } else {
-            alert('Erro ao capturar a foto. Tente novamente.');
-          }
-        } catch (error) {
-          console.error('Erro ao capturar foto:', error);
+          console.log('Foto capturada com sucesso!', photoUrl.substring(0, 50) + '...');
+        } else {
+          console.error('Data URL inválida:', photoUrl);
           alert('Erro ao processar a foto. Tente novamente.');
         }
+      } catch (error) {
+        console.error('Erro ao capturar foto:', error);
+        alert(`Erro ao capturar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       }
     } else {
-      alert('Câmera não disponível. Tente abrir a câmera novamente.');
+      alert('Erro no canvas. Tente reiniciar a câmera.');
     }
   };
 
@@ -460,7 +506,14 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd }: AddEquipme
                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
                           <div className="text-white text-center">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                            <p>Carregando câmera...</p>
+                            <p className="mb-3">Carregando câmera...</p>
+                            <button
+                              type="button"
+                              onClick={() => setIsCameraReady(true)}
+                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                            >
+                              Forçar Carregamento
+                            </button>
                           </div>
                         </div>
                       )}
