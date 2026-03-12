@@ -121,6 +121,8 @@ export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoC
             const reader = new FileReader();
             reader.onloadend = () => {
               const photoUrl = reader.result as string;
+              // Stop camera immediately before handing photo back — don't wait for unmount cleanup
+              stopCamera();
               onPhotoCapture(photoUrl);
               onClose();
             };
