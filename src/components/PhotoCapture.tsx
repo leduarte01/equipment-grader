@@ -10,10 +10,12 @@ interface PhotoCaptureProps {
 export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoCaptureProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [hasStream, setHasStream] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // useRef so the cleanup always sees the current stream, avoiding stale closure
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,10 +43,11 @@ export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoC
           }
         });
 
+        streamRef.current = mediaStream;
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
-          setStream(mediaStream);
         }
+        setHasStream(true);
       } else {
         throw new Error('Câmera não suportada neste navegador');
       }
@@ -63,10 +66,14 @@ export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoC
   };
 
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setHasStream(false);
     setError('');
   };
 
@@ -188,7 +195,7 @@ export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoC
               />
 
               {/* Capture overlay */}
-              {stream && !error && (
+              {hasStream && !error && (
                 <div className="absolute inset-0 pointer-events-none">
                   <div className="absolute inset-4 border-2 border-white border-dashed rounded-lg"></div>
                   <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
@@ -209,7 +216,7 @@ export default function PhotoCapture({ isOpen, onClose, onPhotoCapture }: PhotoC
             </div>
 
             {/* Capture button */}
-            {stream && !error && !isLoading && (
+            {hasStream && !error && !isLoading && (
               <button
                 onClick={capturePhoto}
                 disabled={isCapturing}
