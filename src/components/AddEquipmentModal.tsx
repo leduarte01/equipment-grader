@@ -328,6 +328,7 @@ export default function AddEquipmentModal({ isOpen, onClose, onAdd, editEquipmen
                     <option value="">Selecione a marca...</option>
                     <option value="APPLE">APPLE</option>
                     <option value="DELL">DELL</option>
+                    <option value="LENOVO">LENOVO</option>
                   </select>
                 </div>
 
